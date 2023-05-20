@@ -1,7 +1,7 @@
 from manim import *
 from copy import deepcopy
 
-HOME2 = "/home/rsoko/private/manim/icons"
+HOME2 = "icons"
 
 probabilities = 0.4, 0.6
 labels = np.array(["food", "animals"])
