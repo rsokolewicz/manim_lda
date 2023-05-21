@@ -1,12 +1,26 @@
+from itertools import product
+
 from manim import *
 
-probabilities = 0.4, 0.6
+probabilities = {0: [0.4, 0.6], 1: [0.3, 0.7], 2: [0.6, 0.4]}
 labels = np.array(["food", "animals"])
 
+
 word_probabilities = {
-    labels[0]: [0.2, 0.1, 0.3, 0.15, 0.25],
-    labels[1]: [0.1, 0.15, 0.3, 0.25, 0.2],
+    0: {
+        labels[0]: [0.2, 0.1, 0.3, 0.15, 0.25],
+        labels[1]: [0.1, 0.15, 0.3, 0.25, 0.2],
+    },
+    1: {
+        labels[0]: [0.15, 0.05, 0.35, 0.25, 0.2],
+        labels[1]: [0.1, 0.25, 0.1, 0.3, 0.25],
+    },
+    2: {
+        labels[0]: [0.1, 0.15, 0.3, 0.25, 0.2],
+        labels[1]: [0.2, 0.1, 0.3, 0.15, 0.25],
+    },
 }
+
 
 words = {
     labels[0]: ["banana.svg", "kiwi.svg", "lemon.svg", "strawberry.svg", "tomato.svg"],
@@ -64,32 +78,60 @@ def create_topic_symbol(row, value):
     return symbol
 
 
+def vertical_align(mobjects):
+    this = mobjects[0]
+    x1, y1, z1 = this.get_center()
+    for other in mobjects[1:]:
+        x2, y2, z2 = other.get_center()
+        other.move_to(np.array([x2, y1, z2]))
+
+
 class TopicGenerationSimulation(Scene):
     def construct(self):
-        histogram_topic = create_histogram(probabilities, labels)
+        histogram_topic = create_histogram(probabilities[0], labels)
         histogram_words = create_histogram(
-            sum(word_probabilities.values(), []),
+            sum(word_probabilities[0].values(), []),
             labels=None,
             bar_colors=5 * ["#003f5c"] + 5 * ["#ffa600"],
         )
 
         histogram_words.to_edge(DOWN + RIGHT)
-        for i, symbol in enumerate(sum(words.values(), [])):
-            symbol = SVGMobject("icons/" + symbol, width=0.4)
+        symbols = []
+        for i, svg in enumerate(sum(words.values(), [])):
+            symbol = SVGMobject("icons/" + svg, width=0.4)
             symbol.next_to(histogram_words[0][0][i], DOWN, buff=0.1)
-            histogram_words.add(symbol)
+            symbols.append(symbol)
+        vertical_align(symbols)
+        histogram_words.add(*symbols)
+
         arrow_topic = Line(ORIGIN, DOWN * 0.8).add_tip().set_color(BLUE)
         arrow_word = Line(ORIGIN, DOWN * 0.8).add_tip().set_color(BLUE)
 
         row = VGroup(Tex(r"doc 1:"))
         row.to_edge(UP + LEFT, buff=0)
         self.add(histogram_topic, histogram_words, row)
-        for i in range(10):
-            value = np.random.choice([0, 1], p=probabilities)
+
+        for doc, word in product(np.arange(3), np.arange(6)):
+            if doc > 0 and word == 0:
+                self.play(FadeOut(arrow_topic), FadeOut(arrow_word))
+            if word == 0:
+                self.play(
+                    histogram_topic[0].animate.change_bar_values(probabilities[doc])
+                )
+                self.play(
+                    histogram_words[0].animate.change_bar_values(
+                        sum(word_probabilities[doc].values(), []),
+                    ),
+                )
+            if doc != 0 and word == 0:
+                new_row = VGroup(Tex(f"doc {doc+1}: "))
+                new_row.next_to(row, DOWN, buff=0.1, aligned_edge=LEFT)
+                self.add(new_row)
+                row = new_row
+            value = np.random.choice([0, 1], p=probabilities[doc])
             topic_symbol = create_topic_symbol(row, value)
             row.add(topic_symbol)
-            row.to_edge(UP + LEFT, buff=0)
-            if i == 0:
+            if word == 0:
                 arrow_topic.next_to(histogram_topic[0][0][value], UP, buff=0.1)
                 self.play(
                     FadeIn(topic_symbol),
@@ -103,13 +145,14 @@ class TopicGenerationSimulation(Scene):
                     run_time=0.25,
                 )
                 self.play(FadeIn(topic_symbol), run_time=0.5)
-            topics = list(word_probabilities.keys())
+            topics = list(word_probabilities[doc].keys())
             topic = topics[value]
-            value = np.random.choice(np.arange(5), p=word_probabilities[topic])
+            print(doc, topic)
+            value = np.random.choice(np.arange(5), p=word_probabilities[doc][topic])
             word_symbol = create_word_token(value, topic)
             word_symbol.move_to(topic_symbol.get_center())
             bar = histogram_words[0][0][value + 5 * topics.index(topic)]
-            if i == 0:
+            if word == 0:
                 arrow_word.next_to(
                     bar,
                     UP,
