@@ -26,7 +26,6 @@ def dx_circumferences(x_min=0, x_max=3, dx=0.1):
 
 class CircleCalculus(Scene):
     def construct(self):
-
         axes = Axes(
             x_range=[0, 1.01],
             x_length=1,
@@ -84,7 +83,6 @@ class CircleCalculus(Scene):
 
 class Thumbnail(Scene):
     def construct(self):
-
         text = (
             Tex("3B1B Circle Calculus Tutorial")
             .scale(2)
