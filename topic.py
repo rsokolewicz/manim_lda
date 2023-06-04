@@ -1,5 +1,5 @@
 from itertools import product
-import scipy.stats
+from scipy.stats import dirichlet, multinomial
 
 from manim import *
 
@@ -22,10 +22,26 @@ word_probabilities = {
 }
 
 
-words = {
-    labels[0]: ["banana.svg", "kiwi.svg", "lemon.svg", "strawberry.svg", "tomato.svg"],
-    labels[1]: ["chicken.svg", "piggy.svg", "sheep.svg", "crocodile.svg", "zebra.svg"],
-}
+words = [
+    "banana",
+    "kiwi",
+    "lemon",
+    "strawberry",
+    "tomato",
+    "chicken",
+    "piggy",
+    "sheep",
+    "crocodile",
+    "zebra",
+]
+
+
+def add_svg_xticks(bar_chart):
+    """Adds svg symbols instead of standard x-ticks to a BarChart."""
+    for i, word in enumerate(words):
+        symbol = create_word_token(word)
+        symbol.next_to(bar_chart[0][i], DOWN, buff=0.3, aligned_edge=DOWN)
+        bar_chart.add(symbol)
 
 
 def create_histogram(probabilities, labels, **kwargs):
@@ -34,10 +50,12 @@ def create_histogram(probabilities, labels, **kwargs):
         values=probabilities,
         bar_names=labels,
         y_axis_config={"font_size": 36},
-        y_length=3,
+        x_axis_config={"font_size": 36},
+        y_length=4,
         x_length=5,
         **kwargs,
     )
+
 
 def fix_svg(svgmobject):
     """Fixes missing attributes when loading svg."""
@@ -55,9 +73,9 @@ def fix_svg(svgmobject):
             setattr(svgmobject, attr, 0)
 
 
-def create_word_token(value, topic):
+def create_word_token(word):
     """Creates a word token."""
-    symbol = SVGMobject(f"icons/{words[topic][value]}", height=0.4)
+    symbol = SVGMobject(f"icons/{word}.svg", height=0.4)
     fix_svg(symbol)
     return symbol
 
@@ -69,81 +87,168 @@ def create_topic_symbol(row, value):
     else:
         symbol = Square(side_length=0.5, color=ORANGE)
     symbol.next_to(row, RIGHT, buff=0.05)
+    row.add(symbol)
     return symbol
 
-def add_svg_xticks(histogram):
-    for i, svg in enumerate(sum(words.values(), [])):
-        symbol = SVGMobject("icons/" + svg, width=0.4)
-        symbol.next_to(histogram[0][i], DOWN, buff=0.3, aligned_edge=DOWN)
-        histogram.add(symbol)
 
 class TopicGenerationSimulation(Scene):
-
     alphas_topics = [10, 20]
-    alphas_words_topic1 = [5,10,8,3,10]
-    alphas_words_topic2 = [10,3,8,9,5]
+    alphas_words_topic1 = [5, 10, 8, 3, 10]
+    alphas_words_topic2 = [10, 3, 8, 9, 5]
 
     def construct(self):
         # create empty histograms
-        histogram_topic = create_histogram([0,0.0], labels, y_range=[0, 0.6, 0.2])
-        histogram_words = create_histogram(
-            10*[0],
+        topic_distribution = create_histogram([0, 0.0], labels, y_range=[0, 0.8, 0.2])
+        word_distribution = create_histogram(
+            10 * [0],
             labels=None,
             bar_colors=5 * ["#003f5c"] + 5 * ["#ffa600"],
-            y_range = (0, 0.3, 0.1),
+            y_range=(0, 0.5, 0.1),
         )
-        add_svg_xticks(histogram_words)
+        add_svg_xticks(word_distribution)
 
         # create arrows
         arrow_topic = Line(ORIGIN, DOWN * 0.8).add_tip().set_color(BLUE)
         arrow_word = Line(ORIGIN, DOWN * 0.8).add_tip().set_color(BLUE)
 
         # align objects
-        histogram_topic.to_edge(DOWN + LEFT)
-        histogram_words.to_edge(DOWN + RIGHT)
-        histogram_words.move_to(histogram_topic, UP, UP)
+        topic_distribution.to_edge(DOWN + LEFT)
+        word_distribution.to_edge(DOWN + RIGHT)
+        word_distribution.move_to(topic_distribution, UP, UP)
 
         row = VGroup(Tex(r"doc 1:"))
         row.to_edge(UP + LEFT, buff=0.1)
 
         # initialize view
-        self.add(histogram_topic, histogram_words, row)
-        return
+        self.add(topic_distribution, word_distribution, row)
+        # self.add(topic_distribution, word_distribution)
+        # return
         # animate
-        for i in range(5):
-            topic_p = scipy.stats.dirichlet(self.alphas_topics).rvs(1)[0]
+        # for doc in range(5):
+        # draw probabilities
 
-            word_p1 = scipy.stats.dirichlet(self.alphas_words_topic1).rvs(1)[0]
-            word_p2 = scipy.stats.dirichlet(self.alphas_words_topic2).rvs(1)[0]
-
-            word_p = np.concatenate((word_p1, word_p2))
-            self.play(histogram_topic.animate.change_bar_values(topic_p))
-            self.play(histogram_words.animate.change_bar_values(word_p))
-
-
-        return
-        for doc, word in product(np.arange(3), np.arange(6)):
-            if doc > 0 and word == 0:
+        for doc_index in range(3):
+            topic_prob = dirichlet(self.alphas_topics).rvs(1)[0]
+            word_prob = np.concatenate(
+                [
+                    dirichlet(self.alphas_words_topic1).rvs(1)[0],
+                    dirichlet(self.alphas_words_topic2).rvs(1)[0],
+                ],
+            )
+            if doc_index > 0:
                 self.play(FadeOut(arrow_topic), FadeOut(arrow_word))
-            if word == 0:
+            self.play(topic_distribution.animate.change_bar_values(topic_prob))
+            self.play(word_distribution.animate.change_bar_values(word_prob))
+            # else:
+            #     topic_distribution.change_bar_values(topic_prob)
+            #     word_distribution.change_bar_values(word_prob)
+            #     # self.add(topic_distribution, word_distribution)
+
+            self.play(Wait(1))
+
+            for word_index in range(5):
+                topic = np.argmax(multinomial.rvs(1, topic_prob))
+                word = (
+                    np.argmax(
+                        multinomial.rvs(1, word_prob[5 * topic : 5 * (topic + 1)])
+                    )
+                    + 5 * topic
+                )
+                topic_symbol = create_topic_symbol(row, topic)
+
+                if doc_index != 0 and word_index == 0:
+                    # self.play(FadeOut(arrow_topic), FadeOut(arrow_word))
+                    new_row = VGroup(Tex(f"doc {doc_index+1}: "))
+                    new_row.next_to(row, DOWN, buff=0.1, aligned_edge=LEFT)
+                    self.add(new_row)
+                    row = new_row
+                    topic_symbol = create_topic_symbol(row, topic)
+
+                if word_index == 0:
+                    arrow_topic.next_to(topic_distribution[0][topic], UP, buff=0.1)
+                    arrow_word.next_to(
+                        word_distribution[0][word],
+                        UP,
+                        buff=0.1,
+                    )
+                    self.play(
+                        FadeIn(topic_symbol),
+                        FadeIn(arrow_topic),
+                    )
+                    self.play(FadeIn(arrow_word))
+                else:
+                    self.play(
+                        FadeIn(topic_symbol),
+                        arrow_topic.animate.next_to(
+                            topic_distribution[0][topic], UP, buff=0.1
+                        ),
+                    )
+                    self.play(
+                        arrow_word.animate.next_to(
+                            word_distribution[0][word],
+                            UP,
+                            buff=0.1,
+                        ),
+                    )
+
+                word_symbol = create_word_token(words[word])
+                word_symbol.next_to(
+                    word_distribution[0][word], DOWN, buff=0.3, aligned_edge=DOWN
+                )
+
+                self.play(word_symbol.animate.move_to(topic_symbol.get_center()))
+                self.play(FadeOut(topic_symbol), run_time=0.5)
+
+        #     for word_index in range(6):
+        #         topic, word = draw_topic_and_word()
+        #         topic_symbol = create_topic_symbol(row, topic)
+
+        #         if word_index == 0:
+        #             arrow_topic.next_to(topic_distribution[0][topic], UP, buff=0.1)
+        #             self.play(
+        #                 FadeIn(topic_symbol),
+        #                 FadeIn(arrow_topic),
+        #             )
+        #         else:
+        #             self.play(
+        #                 arrow_topic.animate.next_to(
+        #                     topic_distribution[0][topic],
+        #                     UP,
+        #                     buff=0.1,
+        #                 ),
+        #                 run_time=0.25,
+        #             )
+        #             self.play(FadeIn(topic_symbol), run_time=0.5)
+        return
+        for doc_index, word_index in product(np.arange(3), np.arange(6)):
+            topic = np.argmax(multinomial.rvs(1, topic_prob))
+            word = (
+                np.argmax(multinomial.rvs(1, [word_prob_1, word_prob_2][topic]))
+                + 5 * topic
+            )
+            if doc_index > 0 and word_index == 0:
+                self.play(FadeOut(arrow_topic), FadeOut(arrow_word))
+            if word_index == 0:
                 self.play(
-                    histogram_topic[0].animate.change_bar_values(probabilities[doc])
+                    topic_distribution[0].animate.change_bar_values(
+                        probabilities[doc_index]
+                    )
                 )
                 self.play(
-                    histogram_words[0].animate.change_bar_values(
-                        sum(word_probabilities[doc].values(), []),
+                    word_distribution[0].animate.change_bar_values(
+                        sum(word_probabilities[doc_index].values(), []),
                     ),
                 )
-            if doc != 0 and word == 0:
-                new_row = VGroup(Tex(f"doc {doc+1}: "))
+            if doc_index != 0 and word_index == 0:
+                new_row = VGroup(Tex(f"doc {doc_index+1}: "))
                 new_row.next_to(row, DOWN, buff=0.1, aligned_edge=LEFT)
                 self.add(new_row)
                 row = new_row
-            value = np.random.choice([0, 1], p=probabilities[doc])
+            value = np.random.choice([0, 1], p=probabilities[doc_index])
             topic_symbol = create_topic_symbol(row, value)
             row.add(topic_symbol)
-            if word == 0:
-                arrow_topic.next_to(histogram_topic[0][0][value], UP, buff=0.1)
+            if word_index == 0:
+                arrow_topic.next_to(topic_distribution[0][value], UP, buff=0.1)
                 self.play(
                     FadeIn(topic_symbol),
                     FadeIn(arrow_topic),
@@ -151,18 +256,22 @@ class TopicGenerationSimulation(Scene):
             else:
                 self.play(
                     arrow_topic.animate.next_to(
-                        histogram_topic[0][0][value], UP, buff=0.1,
+                        topic_distribution[0][value],
+                        UP,
+                        buff=0.1,
                     ),
                     run_time=0.25,
                 )
                 self.play(FadeIn(topic_symbol), run_time=0.5)
-            topics = list(word_probabilities[doc].keys())
+            topics = list(word_probabilities[doc_index].keys())
             topic = topics[value]
-            value = np.random.choice(np.arange(5), p=word_probabilities[doc][topic])
+            value = np.random.choice(
+                np.arange(5), p=word_probabilities[doc_index][topic]
+            )
             word_symbol = create_word_token(value, topic)
             word_symbol.move_to(topic_symbol.get_center())
-            bar = histogram_words[0][0][value + 5 * topics.index(topic)]
-            if word == 0:
+            bar = word_distribution[0][0][value + 5 * topics.index(topic)]
+            if word_index == 0:
                 arrow_word.next_to(
                     bar,
                     UP,
